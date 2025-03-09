@@ -1600,6 +1600,175 @@ server {
 
 
 
+# Deploying a Streamlit Web App with Docker on Ubuntu
+
+Here's a step-by-step guide to deploy your Streamlit application in production mode using Docker on an Ubuntu server:
+
+## 1. Set up your Ubuntu server
+
+First, update your server:
+```bash
+sudo apt-get update
+sudo apt-get upgrade -y
+```
+
+## 2. Install Docker
+
+Install Docker on your Ubuntu server:
+```bash
+sudo apt-get install apt-transport-https ca-certificates curl software-properties-common
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io
+```
+
+Verify Docker is running:
+```bash
+sudo systemctl status docker
+```
+
+Add your user to the docker group (optional, for convenience):
+```bash
+sudo usermod -aG docker $USER
+```
+Log out and back in for this to take effect.
+
+## 3. Prepare your Streamlit application
+
+Create a directory for your project:
+```bash
+mkdir -p ~/streamlit-app
+cd ~/streamlit-app
+```
+
+## 4. Create a Dockerfile
+
+Create a Dockerfile in your project directory:
+```bash
+nano Dockerfile
+```
+
+Add the following content:
+```dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8501
+
+# Use this for production mode
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.enableCORS=false", "--server.enableXsrfProtection=false", "--server.enableWebsocketCompression=false"]
+```
+
+## 5. Create requirements.txt
+
+Create a requirements.txt file with your dependencies:
+```bash
+nano requirements.txt
+```
+
+At minimum, include:
+```
+streamlit==1.22.0
+```
+Add other dependencies your app needs.
+
+## 6. Add your Streamlit app files
+
+Create your main streamlit app file (app.py) and any other needed files in this directory.
+
+## 7. Build and run your Docker container
+
+Build the Docker image:
+```bash
+docker build -t streamlit-app .
+```
+
+Run the container:
+```bash
+docker run -d -p 8501:8501 --name streamlit-app streamlit-app
+```
+
+Your Streamlit app should now be running at http://your-server-ip:8501
+
+## 8. Additional production considerations
+
+### Set up Nginx as a reverse proxy (recommended)
+
+Install Nginx:
+```bash
+sudo apt-get install nginx
+```
+
+Create a Nginx configuration:
+```bash
+sudo nano /etc/nginx/sites-available/streamlit
+```
+
+Add the following content:
+```
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://localhost:8501;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+Enable the site:
+```bash
+sudo ln -s /etc/nginx/sites-available/streamlit /etc/nginx/sites-enabled
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+### Set up SSL with Let's Encrypt
+
+Install Certbot:
+```bash
+sudo apt-get install certbot python3-certbot-nginx
+```
+
+Obtain SSL certificate:
+```bash
+sudo certbot --nginx -d your-domain.com
+```
+
+### Docker Compose (optional)
+
+For more complex setups, create a docker-compose.yml file:
+```yaml
+version: '3'
+services:
+  streamlit:
+    build: .
+    ports:
+      - "8501:8501"
+    restart: always
+```
+
+Run with:
+```bash
+docker-compose up -d
+```
+
+Does this cover what you need for your deployment, or would you like more details on any specific aspect?
+
+
+
 
 # Configuring Multiple Top-Level Domains with Docker Apps
 

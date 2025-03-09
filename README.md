@@ -1596,3 +1596,230 @@ server {
     listen 443 ssl http2;
     server_name example.com www.example.com;
     root /var/www/example.
+```
+
+
+
+
+# Configuring Multiple Top-Level Domains with Docker Apps
+
+If you want to use entirely different domains (e.g., `domain-one.com` and `domain-two.com`) for different applications, the approach is similar to using subdomains, but with some key differences. Here's how to set it up:
+
+## Step 1: DNS Configuration
+
+Configure each domain to point to your server's IP address:
+- `domain-one.com` → Your server IP
+- `domain-two.com` → Your server IP
+- `domain-three.com` → Your server IP (if you have a third app)
+
+## Step 2: Obtain SSL Certificates for Each Domain
+
+Get certificates for each domain separately:
+
+```bash
+sudo certbot --nginx -d domain-one.com
+sudo certbot --nginx -d domain-two.com
+sudo certbot --nginx -d domain-three.com
+```
+
+## Step 3: Create Separate Nginx Server Blocks
+
+Create a separate configuration file for each domain:
+
+### For Streamlit (`/etc/nginx/sites-available/domain-one`):
+
+```nginx
+server {
+    listen 80;
+    server_name domain-one.com www.domain-one.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name domain-one.com www.domain-one.com;
+    
+    ssl_certificate /etc/letsencrypt/live/domain-one.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/domain-one.com/privkey.pem;
+    
+    # SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    
+    # Streamlit app
+    location / {
+        proxy_pass http://localhost:8501/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### For Shiny (`/etc/nginx/sites-available/domain-two`):
+
+```nginx
+server {
+    listen 80;
+    server_name domain-two.com www.domain-two.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name domain-two.com www.domain-two.com;
+    
+    ssl_certificate /etc/letsencrypt/live/domain-two.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/domain-two.com/privkey.pem;
+    
+    # SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    
+    # Shiny app
+    location / {
+        proxy_pass http://localhost:3838/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+    }
+}
+```
+
+### For Django (`/etc/nginx/sites-available/domain-three`):
+
+```nginx
+server {
+    listen 80;
+    server_name domain-three.com www.domain-three.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name domain-three.com www.domain-three.com;
+    
+    ssl_certificate /etc/letsencrypt/live/domain-three.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/domain-three.com/privkey.pem;
+    
+    # SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    
+    # Django app
+    location / {
+        proxy_pass http://localhost:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Serve Django static files (if needed)
+    location /static/ {
+        alias /path/to/your/django/static/;
+    }
+}
+```
+
+## Step 4: Enable the New Configurations
+
+```bash
+sudo ln -s /etc/nginx/sites-available/domain-one /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/domain-two /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/domain-three /etc/nginx/sites-enabled/
+
+# Remove any old configurations
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo rm -f /etc/nginx/sites-enabled/multi-app
+
+# Test and reload Nginx
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+## Step 5: Update Application Configurations
+
+### For Django:
+Update `settings.py` to recognize the new domain:
+
+```python
+ALLOWED_HOSTS = ['domain-three.com', 'www.domain-three.com']
+CSRF_TRUSTED_ORIGINS = ['https://domain-three.com', 'https://www.domain-three.com']
+```
+
+### For Streamlit (if needed):
+If you're using custom base URLs, you might need to update the Streamlit configuration.
+
+## Step 6: Docker Compose Configuration
+
+Your `docker-compose.yml` remains largely the same, but you can add labels for documentation:
+
+```yaml
+version: '3'
+
+services:
+  streamlit:
+    build: ./streamlit-app
+    ports:
+      - "8501:8501"
+    restart: always
+    container_name: streamlit-app
+    labels:
+      - "app.domain=domain-one.com"
+
+  shiny:
+    build: ./shiny-app
+    ports:
+      - "3838:3838"
+    restart: always
+    container_name: shiny-app
+    labels:
+      - "app.domain=domain-two.com"
+
+  django:
+    build: ./django-app
+    ports:
+      - "8000:8000"
+    restart: always
+    container_name: django-app
+    labels:
+      - "app.domain=domain-three.com"
+```
+
+## Additional Considerations
+
+1. **DNS Management**: If all domains are registered through the same provider, you can manage them together. Otherwise, you'll need to update each domain's DNS settings separately.
+
+2. **Certificate Renewal**: Ensure Let's Encrypt can renew all certificates. The standard certbot cron job will handle this automatically.
+
+3. **SEO and Branding**: Using separate domains works well if the applications serve completely different purposes or brands.
+
+4. **Shared Services**: If your apps need to share backend services, you may need to configure cross-origin resource sharing (CORS).
+
+5. **Domain Redirects**: You might want to set up domain redirects (e.g., redirect `www.domain-one.com` to `domain-one.com`) for consistency.
+
+Each application will now be accessible on its own dedicated domain with SSL encryption:
+- Streamlit: `https://domain-one.com`
+- Shiny: `https://domain-two.com`
+- Django: `https://domain-three.com`
+
+
+    

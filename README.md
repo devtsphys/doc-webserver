@@ -1728,6 +1728,42 @@ server {
 }
 ```
 
+We can enforce SSL encryption by using the following changes
+
+```nginx
+server {
+    listen 80;
+    server_name streamlit.yourdomain.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name streamlit.yourdomain.com;
+    
+    ssl_certificate /etc/letsencrypt/live/streamlit.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/streamlit.yourdomain.com/privkey.pem;
+    
+    # SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    
+    # Streamlit specific settings
+    location / {
+        proxy_pass http://localhost:8501/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
 Enable the site:
 ```bash
 sudo ln -s /etc/nginx/sites-available/streamlit /etc/nginx/sites-enabled
